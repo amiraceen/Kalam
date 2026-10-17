@@ -31,7 +31,7 @@ STATE = {
                  "show_bar_always": False, "show_in_dock": False, "sounds": True, "mute_while_dictating": False,
                  "pause_media_while_dictating": False, "ui_language": "en"},
     "options": {"dictation_language": [["auto", "Arabic or English (auto)"], ["ar", "Arabic"], ["en", "English"]],
-                "speech_model": [["small", "Fast"], ["turbo", "Accurate"]]},
+                "speech_model": [["small", "Fast"], ["extensive", "Extensive"]]},
     "notes": [{"id": "a1", "title": "Weekly sync", "created": NOW - 900, "meeting": True, "duration": 754,
                "recording": False, "preview": "Decisions"},
               {"id": "b2", "title": "Groceries", "created": NOW - 86400, "meeting": False, "duration": 0,

@@ -318,13 +318,15 @@ class DictationCore:
         try:
             if engine == "mlx":
                 import mlx_engine
-                model = mlx_engine.MlxWhisper(path)
+                model = (mlx_engine.RoutedWhisper(*path) if isinstance(path, (tuple, list))
+                         else mlx_engine.MlxWhisper(path))
             else:
                 model = WhisperModel(path or MODEL_PATH or MODEL_SIZE, device="cpu", compute_type=COMPUTE_TYPE)
             # Warm-up: the first transcription is much slower (memory allocation, caches),
             # so pay that cost now instead of on the first dictation.
             warm = (0.01 * np.random.default_rng(0).standard_normal(16000)).astype(np.float32)
-            list(model.transcribe(warm, language="en", vad_filter=False, **DECODE)[0])
+            for lang in getattr(model, "LANGUAGES", ("en",)):
+                list(model.transcribe(warm, language=lang, vad_filter=False, **DECODE)[0])
             with self.model_lock:
                 self.model, self.model_label = model, label or models.MODELS["small"][1]
                 self.dialect_prompt = engine == "mlx" if prompt is None else prompt

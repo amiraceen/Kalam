@@ -307,7 +307,7 @@ class AppWiringTest(unittest.TestCase):
         self.assertEqual(seen["language"], "en")
         self.assertNotIn("شحالش", seen["initial_prompt"] or "")
 
-    def test_choosing_accurate_model_downloads_then_loads_it(self):
+    def test_choosing_extensive_model_downloads_then_loads_it(self):
         loaded, gate = [], threading.Event()
 
         def fake_download(name, folder):
@@ -316,13 +316,14 @@ class AppWiringTest(unittest.TestCase):
         self.app.models._download = fake_download
         self.patch(dictation.DictationCore, "load_model",
                    lambda core, path=None, label=None, engine="cpu", prompt=None: loaded.append((path, label, engine)) or True)
-        self.app.handle_message({"type": "saveSettings", "changes": {"speech_model": "turbo"}}, self.bridge())
+        self.app.handle_message({"type": "saveSettings", "changes": {"speech_model": "extensive"}}, self.bridge())
         st = self.app.state_for(self.bridge())["model"]
-        self.assertEqual((st["choice"], st["downloading"], st["ready"]), ("turbo", "turbo", False))
+        self.assertEqual((st["choice"], st["downloading"], st["ready"]), ("extensive", "extensive", False))
         gate.set()
         self.app.models._thread.join(2)
-        self.assertTrue(loaded[-1][0].endswith("whisper-large-v3-turbo-mlx"))
-        self.assertEqual(loaded[-1][1:], ("Whisper large-v3-turbo", "mlx"))
+        self.assertTrue(loaded[-1][0][0].endswith("whisper-large-v3-turbo-mlx"))
+        self.assertTrue(loaded[-1][0][1].endswith("whisper-turbo-arabic-dialects-mlx"))
+        self.assertEqual(loaded[-1][1:], ("Whisper turbo + Arabic dialects", "mlx"))
         self.app.handle_message({"type": "saveSettings", "changes": {"speech_model": "small"}}, self.bridge())
         for t in threading.enumerate():
             if t.name == "load_model":

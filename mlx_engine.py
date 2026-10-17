@@ -131,6 +131,31 @@ class MlxWhisper:
                           "avg_logprob": result.avg_logprob, "compression_ratio": result.compression_ratio})]
 
 
+class RoutedWhisper:
+    """The "Extensive" model: two Whispers used together. The original large-v3-turbo picks
+    the language and writes English; the one retrained on Arabic dialects writes Arabic.
+    (The retrained one only learned Arabic: on its own it hears English as Arabic and spells
+    it out in Arabic letters.)"""
+
+    LANGUAGES = ("en", "ar")             # warm both models up at load
+
+    def __init__(self, base_path, arabic_path):
+        self.base = MlxWhisper(base_path)
+        self.arabic = MlxWhisper(arabic_path)
+
+    def detect_language(self, audio, vad_filter=False, vad_parameters=None):
+        return self.base.detect_language(audio, vad_filter=vad_filter, vad_parameters=vad_parameters)
+
+    def transcribe(self, audio, language=None, **kw):
+        if language is None:
+            try:
+                language = self.detect_language(audio, vad_filter=True)[0]
+            except ValueError:
+                return iter(()), None
+        model = self.arabic if language == "ar" else self.base
+        return model.transcribe(audio, language=language, **kw)
+
+
 _HF_NAMES = [("model.", ""), (".layers.", ".blocks."), (".self_attn_layer_norm.", ".attn_ln."),
              (".self_attn.", ".attn."), (".encoder_attn_layer_norm.", ".cross_attn_ln."),
              (".encoder_attn.", ".cross_attn."), (".final_layer_norm.", ".mlp_ln."), (".q_proj.", ".query."),

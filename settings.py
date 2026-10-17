@@ -9,7 +9,7 @@ import os
 import threading
 
 from speed import LANGUAGE_OPTIONS
-from models import MODEL_OPTIONS
+from models import LEGACY_CHOICES, MODEL_OPTIONS
 from i18n import UI_LANGUAGE_OPTIONS
 from system import DEFAULT_DICTATION_KEY, JS_CODE_TO_KEYCODE
 
@@ -20,7 +20,7 @@ DEFAULTS = {
     "dictation_key": DEFAULT_DICTATION_KEY,
     # System → App settings: the language of Kalam's own screens and menus
     "ui_language": "en",
-    # System → Transcribe: built-in "small", or the downloaded, more accurate "turbo"
+    # System → Transcribe: built-in "small", or the downloaded "extensive"
     "speech_model": "small",
     # System → App settings
     "launch_at_login": False,
@@ -42,6 +42,8 @@ _CHOICES = {
 def _normalize(key, value):
     """Coerce bridge values (JS numbers arrive as floats or int subclasses) to plain types."""
     default = DEFAULTS[key]
+    if key == "speech_model" and value in LEGACY_CHOICES:
+        return LEGACY_CHOICES[value]           # Accurate / Large / Arabic dialects → Extensive
     if isinstance(default, bool):
         return bool(value) if isinstance(value, bool) else value
     if isinstance(default, int) and not isinstance(value, bool):

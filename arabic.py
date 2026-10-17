@@ -62,9 +62,13 @@ def normalize(text, western_digits=True):
 
 
 # Whisper continues in the style of the text it's given as "previous text". Everyday
-# dialect lines (Gulf/Omani with the feminine -ش, Egyptian, Levantine) nudge it to write
-# colloquial words as said instead of forcing them into formal Arabic or another script.
-DIALECT_PROMPT = ("هلا والله، شحالش؟ وين صرتي؟ بغيتش في شي. كيفكم يا جماعة؟ "
+# dialect lines nudge it to write colloquial words as said instead of forcing them into
+# formal Arabic or another script:
+#   - Gulf/Omani with the feminine -ش ("أقولش" was heard as "أقول ليش"),
+#   - English words left in Latin letters inside Arabic, the way people mix them,
+#   - Egyptian and Levantine.
+DIALECT_PROMPT = ("هلا والله، شحالش؟ وين صرتي؟ بغيت أقولش شي. عندش وقت؟ شفتش أمس. "
+                  "أرسلت لش الـ email بعد الـ meeting. "
                   "ازيك، عامل ايه؟ كيفك، شو أخبارك؟")
 
 

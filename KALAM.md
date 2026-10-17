@@ -55,16 +55,14 @@ You decide what to keep:
 
 Every clear asks you to click twice, so nothing is deleted by accident.
 
-### Speech models
+### Two speech models
 
 | Model | Best for | Size | Speed (5-second clip) |
 |---|---|---|---|
 | **Fast** (built in) | English and quick notes; works right after install | Included | About 3 to 5 seconds on the processor |
-| **Accurate** (optional download) | Arabic dialects and mixed Arabic and English | 1.6 GB, downloaded once from Settings | About 0.3 seconds on the Mac's graphics chip |
-| **Large** (optional download) | The full Whisper large-v3; about as accurate as Accurate, worth trying on your own voice | 3.1 GB | About 2.5 times slower than Accurate |
-| **Arabic dialects** (optional download) | Accurate retrained by the community on Arabic dialects; may suit everyday speech better, weaker on formal Arabic | 3.2 GB download, stored as 1.6 GB | Same as Accurate |
+| **Extensive** (optional download) | Arabic dialects, including Gulf and Omani, and mixed Arabic and English | Up to 4.9 GB, downloaded once from Settings, stored as 3.2 GB | Under a second on the Mac's graphics chip |
 
-The Accurate model is also told which dialect words to expect (Gulf, Omani, Egyptian and Levantine), so casual speech comes out as you said it, not as formal Arabic.
+Extensive is two models working together. Whisper large-v3-turbo listens first, works out whether you're speaking Arabic or English, and writes English. Arabic goes to a version of it that was retrained on Arabic dialects. It is also told which dialect words to expect (Omani and Gulf forms like *أقولش* and *شحالش*, Egyptian and Levantine), and that English words inside Arabic stay in English letters.
 
 ### Arabic and English interface
 
@@ -73,7 +71,7 @@ The whole app (window, menus and messages) can be shown in **English or Arabic**
 ### Settings at a glance
 
 - **Speaking language:** Arabic or English (auto), Arabic only, or English only. Picking one language makes text appear faster.
-- **Speech model:** Fast, Accurate, Large or Arabic dialects.
+- **Speech model:** Fast or Extensive.
 - **App language:** English or العربية.
 - **Launch at login**, **show the Kalam bar at all times**, **show the app in the Dock**.
 - **Sounds** when recording starts and stops.
@@ -83,7 +81,7 @@ The whole app (window, menus and messages) can be shown in **English or Arabic**
 
 - Speech is turned into text **on your Mac**; recordings are never uploaded.
 - History, notes, your words, shortcuts and settings are stored only on your Mac, in `~/Library/Application Support/Kalam`.
-- The only time Kalam goes online is when you choose to download the Accurate model.
+- The only time Kalam goes online is when you choose to download the Extensive model.
 - To erase everything: quit Kalam and delete that folder.
 
 ## What you need
@@ -101,7 +99,7 @@ The whole app (window, menus and messages) can be shown in **English or Arabic**
 2. Open Kalam. If macOS says it can't verify the app, go to **System Settings → Privacy & Security** and click **Open Anyway**.
 3. Allow the **Microphone**, then switch Kalam on under **Privacy & Security → Accessibility**.
 4. Wait for the Kalam icon in the menu bar, then hold **Right Option ⌥** and talk.
-5. Optional, for best Arabic: open **Settings** and choose the **Accurate** speech model.
+5. Optional, for best Arabic: open **Settings** and choose the **Extensive** speech model.
 
 ## How it's built (for the curious)
 

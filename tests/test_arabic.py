@@ -43,6 +43,8 @@ class LanguagePickTest(unittest.TestCase):
 
     def test_prompt(self):
         self.assertIn("شحالش", arabic.initial_prompt("ar"))
+        self.assertIn("أقولش", arabic.initial_prompt("ar"))          # Omani -ش, not "أقول ليش"
+        self.assertIn("email", arabic.initial_prompt("ar"))          # English words stay in Latin
         self.assertTrue(arabic.initial_prompt("ar", ["مسقط"]).endswith("مسقط"))
         self.assertEqual(arabic.initial_prompt("en", ["Maal", "Kalam"]), "Maal, Kalam")
         self.assertIsNone(arabic.initial_prompt("en"))
@@ -66,27 +68,55 @@ class ModelStoreTest(unittest.TestCase):
         store = models.ModelStore(tempfile.mkdtemp(), builtin_path="/app/model", downloader=fake)
         self.assertTrue(store.ready("small"))
         self.assertEqual(store.path("small"), "/app/model")
-        self.assertFalse(store.ready("turbo"))
+        self.assertFalse(store.ready("extensive"))
         done = []
-        store.download("turbo", done.append)
-        self.assertEqual(store.downloading, "turbo")
+        store.download("extensive", done.append)
+        self.assertEqual(store.downloading, "extensive")
         self.assertIsNotNone(store.progress())
-        store.download("turbo", done.append)            # second click while running: ignored
+        store.download("extensive", done.append)        # second click while running: ignored
         gate.set()
         store._thread.join(2)
-        self.assertEqual((calls, done), (["turbo"], [True]))
-        self.assertTrue(store.ready("turbo"))
+        self.assertEqual((calls, done), (["turbo", "dialect"], [True]))   # both halves, one click
+        self.assertTrue(store.ready("extensive"))
         self.assertIsNone(store.progress())
-        self.assertTrue(store.path("turbo").endswith("whisper-large-v3-turbo-mlx"))
-        self.assertEqual(store.engine("turbo"), "mlx")
+        base, ar = store.path("extensive")
+        self.assertTrue(base.endswith("whisper-large-v3-turbo-mlx"))
+        self.assertTrue(ar.endswith("whisper-turbo-arabic-dialects-mlx"))
+        self.assertEqual(store.engine("extensive"), "mlx")
+        self.assertTrue(store.dialect_prompt("extensive"))
+        self.assertFalse(store.dialect_prompt("small"))
+
+    def test_extensive_reuses_an_earlier_download(self):
+        import tempfile
+        import models
+        folder, calls = tempfile.mkdtemp(), []
+        os.makedirs(os.path.join(folder, "whisper-large-v3-turbo-mlx"))
+        open(os.path.join(folder, "whisper-large-v3-turbo-mlx", ".complete"), "w").close()
+        store = models.ModelStore(folder, downloader=lambda name, f: calls.append(name))
+        store.download("extensive", lambda ok: None)
+        store._thread.join(2)
+        self.assertEqual(calls, ["dialect"])            # Accurate from before is kept
+        self.assertTrue(store.ready("extensive"))
+
+    def test_old_model_choices_become_extensive(self):
+        import json
+        import tempfile
+        import settings
+        path = os.path.join(tempfile.mkdtemp(), "settings.json")
+        for old in ("turbo", "large", "dialect"):
+            with open(path, "w") as f:
+                json.dump({"speech_model": old}, f)
+            self.assertEqual(settings.Settings(path)["speech_model"], "extensive")
 
     def test_removes_old_cpu_turbo_download(self):
         import tempfile
         import models
         folder = tempfile.mkdtemp()
-        os.makedirs(os.path.join(folder, "large-v3-turbo"))
+        for name in ("large-v3-turbo", "whisper-large-v3-mlx"):
+            os.makedirs(os.path.join(folder, name))
         models.ModelStore(folder)
-        self.assertFalse(os.path.exists(os.path.join(folder, "large-v3-turbo")))
+        for name in ("large-v3-turbo", "whisper-large-v3-mlx"):
+            self.assertFalse(os.path.exists(os.path.join(folder, name)))
 
     def test_failed_download_reports_error(self):
         import tempfile
@@ -97,11 +127,11 @@ class ModelStoreTest(unittest.TestCase):
 
         store = models.ModelStore(tempfile.mkdtemp(), downloader=fail)
         done = []
-        store.download("turbo", done.append)
+        store.download("extensive", done.append)
         store._thread.join(2)
         self.assertEqual(done, [False])
         self.assertEqual(store.error, "no internet")
-        self.assertFalse(store.ready("turbo"))
+        self.assertFalse(store.ready("extensive"))
 
 
 if __name__ == "__main__":

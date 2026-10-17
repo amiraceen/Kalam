@@ -127,6 +127,41 @@ class MlxEngineTest(unittest.TestCase):
 
 
 
+class RoutedWhisperTest(unittest.TestCase):
+    """Extensive: the original turbo picks the language and writes English; Arabic goes to
+    the dialect model (which on its own spelled English out in Arabic letters)."""
+
+    def test_english_to_turbo_arabic_to_dialect_model(self):
+        import mlx_engine
+        used = []
+
+        class Fake:
+            def __init__(self, path):
+                self.path = path
+
+            def detect_language(self, audio, vad_filter=False, vad_parameters=None):
+                used.append(("detect", self.path))
+                return "en", 0.9, [("en", 0.9), ("ar", 0.1)]
+
+            def transcribe(self, audio, language=None, **kw):
+                used.append((language, self.path))
+                return iter(()), None
+
+        real = mlx_engine.MlxWhisper
+        mlx_engine.MlxWhisper = Fake
+        try:
+            m = mlx_engine.RoutedWhisper("turbo", "dialect")
+        finally:
+            mlx_engine.MlxWhisper = real
+        audio = np.zeros(16000, np.float32)
+        self.assertEqual(m.detect_language(audio)[0], "en")
+        m.transcribe(audio, language="en")
+        m.transcribe(audio, language="ar", initial_prompt="x")
+        m.transcribe(audio)                                   # no language: detect with turbo
+        self.assertEqual(used, [("detect", "turbo"), ("en", "turbo"), ("ar", "dialect"),
+                                ("detect", "turbo"), ("en", "turbo")])
+
+
 class HfConversionNamesTest(unittest.TestCase):
     """Transformers Whisper weight names map onto mlx_whisper's (full check with MLX is in CI)."""
 
