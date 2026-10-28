@@ -95,7 +95,7 @@ The whole app (window, menus and messages) can be shown in **English or Arabic**
 
 ## Getting started
 
-1. Open **Kalam.dmg** and drag **Kalam** into **Applications**.
+1. Download **Kalam.dmg** from https://github.com/amiraceen/Kalam/releases/latest/download/Kalam.dmg, open it and drag **Kalam** into **Applications**.
 2. Open Kalam. If macOS says it can't verify the app, go to **System Settings → Privacy & Security** and click **Open Anyway**.
 3. Allow the **Microphone**, then switch Kalam on under **Privacy & Security → Accessibility**.
 4. Wait for the Kalam icon in the menu bar, then hold **Right Option ⌥** and talk.
