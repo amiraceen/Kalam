@@ -1,6 +1,9 @@
-# Dictation App 2026
+# Kalam (كلام)
 
-Private, offline push-to-talk dictation for macOS. Hold **Right Option ⌥** or set custom key, speak, release, and the text appears in whatever app you're typing in. Speech recognition runs on your Mac with [faster-whisper](https://github.com/SYSTRAN/faster-whisper) (Whisper *small*), so nothing is sent to the internet.
+**Write less, speak more.** See [KALAM.md](KALAM.md) for the full product description.
+
+
+Private, offline push-to-talk voice-to-text for macOS, in Arabic and English. Hold **Right Option ⌥** or set custom key, speak, release, and the text appears in whatever app you're typing in. Speech recognition runs on your Mac with [faster-whisper](https://github.com/SYSTRAN/faster-whisper) (Whisper *small*), so nothing is sent to the internet.
 
 ## Features
 
@@ -18,14 +21,14 @@ Private, offline push-to-talk dictation for macOS. Hold **Right Option ⌥** or 
 
 ## Install (ready-made app)
 
-Requires a Mac with Apple silicon (M1 or newer).
+Requires a Mac with Apple silicon (M1 or newer) and macOS 13 or newer.
 
-1. Download **Kalam.zip** from the [Releases](../../releases) page, unzip it, and drag **Kalam** into **Applications**.
-2. Open it. macOS will say it can't verify the app, because it is self-signed, not notarized by Apple. Click **Done**, then go to **System Settings → Privacy & Security** and click **Open Anyway**.
+1. Download **Kalam.dmg** from https://github.com/amiraceen/Kalam/releases/latest/download/Kalam.dmg, open it and drag **Kalam** into **Applications**.
+2. Open it. Until the app is notarized, macOS says it can't verify it: go to **System Settings → Privacy & Security** and click **Open Anyway**.
 3. Click **Allow** when it asks for the microphone.
-4. Go to **System Settings → Privacy & Security → Accessibility** and switch **Dictation** on. If it isn't listed, add it with **+**.
-5. Wait for the filled circle in the menu bar, then hold **Right Option** and talk.
-
+4. Go to **System Settings → Privacy & Security → Accessibility** and switch **Kalam** on. If it isn't listed, add it with **+**.
+5. Wait for the Kalam icon in the menu bar, then hold **Right Option** and talk.
+6. Optional, for best Arabic: **Settings → Speech model → Extensive** (one-time download).
 
 Your history, dictionary, snippets, notes and settings are stored in `~/Library/Application Support/Kalam`.
 
@@ -54,13 +57,9 @@ Grant your terminal app **Microphone** and **Accessibility** permission.
 
 The DMG is ad-hoc signed unless you add a certificate. To ship a build that opens without the **Open Anyway** step, add these repository secrets: `MACOS_CERT_P12` (base64 Developer ID certificate), `MACOS_CERT_PASSWORD` and `MACOS_SIGN_IDENTITY`. For notarization, also add `NOTARY_APPLE_ID`, `NOTARY_TEAM_ID` and `NOTARY_PASSWORD` (an app-specific password).
 
-**Manual build:**
+**Publish a release for the website:** Actions → **Build macOS app** → **Run workflow**, type a version such as `v1.1`. After the tests pass, `Kalam.dmg` is attached to a release marked **Latest**, so the download link above always serves the newest app. Never mark a non-app release (for example a video) as Latest.
 
-```bash
-venv/bin/pyinstaller --noconfirm Dictation.spec
-```
-
-The build bundles the Whisper model from your Hugging Face cache, so run it from source once first. `build_pkg.sh` builds, signs and installs to `/Applications`. It signs with a local code-signing certificate named **Dictation Local Signing**; create your own, or replace that step with `codesign --force --deep -s - dist/Dictation.app` (ad-hoc signing). With ad-hoc signing you have to re-grant Accessibility after every rebuild.
+**Manual build:** `bash build_dmg.sh` on a Mac (needs the Whisper model in your Hugging Face cache, so run from source once first).
 
 ## Project layout
 
@@ -75,8 +74,11 @@ The build bundles the Whisper model from your Hugging Face cache, so run it from
 | `ui.py` | Native recording pill, pop-up cards (NSPanel), main window and Notepad (WKWebView bridge) |
 | `web/index.html` | Main window interface |
 | `menubar/`, `AppIcon.icns`, `icon/` | Menu-bar and app icons |
-| `Dictation.spec` | PyInstaller build definition |
-| `main.m`, `main.swift`, `build_app.sh` | Earlier native prototype using Apple Speech (separate app) |
+| `Dictation.spec` | PyInstaller build definition (produces `Kalam.app`) |
+| `build_dmg.sh` | Builds, signs and packs `dist/Kalam.dmg` |
+| `models.py`, `mlx_engine.py` | Fast and Extensive speech models |
+| `arabic.py`, `i18n.py` | Arabic clean-up and the English/Arabic interface |
+| `tools/` | Speed and Arabic accuracy benchmarks |
 
 ## Brand
 
