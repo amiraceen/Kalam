@@ -1,6 +1,6 @@
 # Dictation App 2026
 
-Private, offline push-to-talk dictation for macOS. Hold **Right Option ⌥**, speak, release, and the text appears in whatever app you're typing in. Speech recognition runs on your Mac with [faster-whisper](https://github.com/SYSTRAN/faster-whisper) (Whisper *small*), so nothing is sent to the internet.
+Private, offline push-to-talk dictation for macOS. Hold **Right Option ⌥** or set custom key, speak, release, and the text appears in whatever app you're typing in. Speech recognition runs on your Mac with [faster-whisper](https://github.com/SYSTRAN/faster-whisper) (Whisper *small*), so nothing is sent to the internet.
 
 ## Features
 
@@ -20,13 +20,12 @@ Private, offline push-to-talk dictation for macOS. Hold **Right Option ⌥**, sp
 
 Requires a Mac with Apple silicon (M1 or newer).
 
-1. Download **Dictation.zip** from the [Releases](../../releases) page, unzip it, and drag **Dictation** into **Applications**.
+1. Download **Kalam.zip** from the [Releases](../../releases) page, unzip it, and drag **Kalam** into **Applications**.
 2. Open it. macOS will say it can't verify the app, because it is self-signed, not notarized by Apple. Click **Done**, then go to **System Settings → Privacy & Security** and click **Open Anyway**.
 3. Click **Allow** when it asks for the microphone.
 4. Go to **System Settings → Privacy & Security → Accessibility** and switch **Dictation** on. If it isn't listed, add it with **+**.
 5. Wait for the filled circle in the menu bar, then hold **Right Option** and talk.
 
-This build installs as **Kalam**, a separate app from the original **Dictation** and from **Dictation 2**: it has its own app ID, permissions and data folder (`~/Library/Application Support/Kalam`). On first launch it copies everything from Dictation 2's data folder (history, words, shortcuts, notes, settings, voice test), or from the original Dictation if Dictation 2 was never installed; it never changes the older apps' files. Because it's a new app, macOS asks for Microphone and Accessibility permission again. Quit the other apps before using Kalam, since they all listen for Right Option.
 
 Your history, dictionary, snippets, notes and settings are stored in `~/Library/Application Support/Kalam`.
 
