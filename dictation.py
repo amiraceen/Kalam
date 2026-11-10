@@ -17,6 +17,7 @@ from faster_whisper import WhisperModel
 from pynput import keyboard
 
 import arabic
+import learn
 from speed import DECODE, pick_language, whisper_language
 import models
 import i18n
@@ -86,6 +87,8 @@ MODEL_SIZE   = "small"              # small = much better accuracy than base
 LANGUAGE     = None                 # None = auto-detect (supports 100+ languages)
 MIN_DURATION = 0.3
 COMPUTE_TYPE = "int8"
+RESTORE_AFTER = 2.0              # seconds before the old clipboard comes back
+AFTER_PASTE = None               # set by the app: start watching for corrections
 TYPING_DELAY = 0.03               # transcription already takes longer than the key release
 
 ICON_IDLE         = "🎤"
@@ -203,6 +206,7 @@ def _paste_on_main(text: str):
     old = pb.stringForType_(NSPasteboardTypeString)
     pb.clearContents()
     pb.setString_forType_(text, NSPasteboardTypeString)
+    ours = pb.changeCount()
     src = Quartz.CGEventSourceCreate(Quartz.kCGEventSourceStateHIDSystemState)
     for down in (True, False):
         ev = Quartz.CGEventCreateKeyboardEvent(src, 9, down)          # 9 = "v"
@@ -210,11 +214,15 @@ def _paste_on_main(text: str):
         Quartz.CGEventPost(Quartz.kCGHIDEventTap, ev)
 
     def restore():
-        if old is not None:
+        # Only if nothing else was copied since. Restoring after 0.6 s raced slow apps: they
+        # read the clipboard after it was put back and pasted the OLD text instead.
+        if old is not None and pb.changeCount() == ours:
             pb.clearContents()
             pb.setString_forType_(old, NSPasteboardTypeString)
     from PyObjCTools import AppHelper
-    AppHelper.callLater(0.6, restore)
+    AppHelper.callLater(RESTORE_AFTER, restore)
+    if AFTER_PASTE is not None:
+        AFTER_PASTE(text)
 
 
 def _type_text(text: str):
@@ -298,6 +306,7 @@ class DictationCore:
         self._cancel   = False
         self.snippets   = _load_snippets()
         self.dictionary = _load_dictionary()
+        self.learner    = learn.Learner(APP_DIR, DICT_FILE)
         self.model_label = models.MODELS["small"][1]
         self.dialect_prompt = False                 # only the large model benefits from it
         self.on_level   = lambda rms: None          # live mic level for the pill
@@ -308,6 +317,7 @@ class DictationCore:
     def reload_config(self):
         self.snippets   = _load_snippets()
         self.dictionary = _load_dictionary()
+        self.learner.reload()
         self.on_status_change(ICON_IDLE, "Config reloaded ✓")
 
     def load_model(self, path=None, label=None, engine="cpu", prompt=None):
@@ -318,8 +328,13 @@ class DictationCore:
         try:
             if engine == "mlx":
                 import mlx_engine
-                model = (mlx_engine.RoutedWhisper(*path) if isinstance(path, (tuple, list))
-                         else mlx_engine.MlxWhisper(path))
+                need_arabic = self.language() != "en"
+                parts = list(path) if isinstance(path, (tuple, list)) else [path]
+                if not need_arabic:
+                    parts = parts[:1]
+                mlx_engine.keep_resident(sum(mlx_engine.weights_size(p) for p in parts) + 512 * 2**20)
+                model = (mlx_engine.RoutedWhisper(*path, need_arabic=need_arabic)
+                         if isinstance(path, (tuple, list)) else mlx_engine.MlxWhisper(path))
             else:
                 model = WhisperModel(path or MODEL_PATH or MODEL_SIZE, device="cpu", compute_type=COMPUTE_TYPE)
             # Warm-up: the first transcription is much slower (memory allocation, caches),
@@ -356,6 +371,28 @@ class DictationCore:
         self.on_record_state(True)
         self.on_status_change(ICON_RECORDING, "Recording…")
         threading.Thread(target=self._record_loop, daemon=True).start()
+        threading.Thread(target=self._wake_model, daemon=True).start()
+
+    def _wake_model(self):
+        """While the user talks, bring the model's weights back into memory if macOS
+        swapped them out, so transcription starts right away when the key is released."""
+        model = self.model
+        if hasattr(model, "touch"):
+            with self.model_lock:
+                try:
+                    t = time.time()
+                    model.touch()
+                    if time.time() - t > 0.5:
+                        print(f"model woke up in {time.time() - t:.1f}s", flush=True)
+                except Exception as e:
+                    print(f"wake model: {e}", flush=True)
+
+    def set_arabic(self, need):
+        """Language setting changed: load or drop the Arabic dialect model."""
+        model = self.model
+        if hasattr(model, "need_arabic"):
+            with self.model_lock:
+                model.need_arabic(need)
 
     def stop_recording(self):
         with self._lock:
@@ -399,7 +436,7 @@ class DictationCore:
             lang = self._language_for(audio)
             segments, _ = self.model.transcribe(
                 audio, language=lang,
-                initial_prompt=arabic.initial_prompt(lang, self.dictionary, self.dialect_prompt),
+                initial_prompt=arabic.initial_prompt(lang, learn.prompt_words(self.dictionary), self.dialect_prompt),
                 vad_filter=True,
                 vad_parameters=dict(min_silence_duration_ms=300),
                 **DECODE,
@@ -410,8 +447,11 @@ class DictationCore:
         self._secs = len(audio) / SAMPLE_RATE
         self.on_status_change(ICON_TRANSCRIBING, "Transcribing…")
         try:
+            t = time.time()
             text = _clean_text(self.transcribe_raw(audio))
+            text = self.learner.apply(text)          # your learned fixes ("Hexfield" → "Higgsfield")
             text = _apply_snippets(text, self.snippets)
+            print(f"{time.strftime('%H:%M:%S')} {self._secs:.1f}s audio → text in {time.time() - t:.2f}s", flush=True)
             if text:
                 self.on_result(text, self._secs)   # save first: history is the backup if pasting fails
                 _type_text(text)
@@ -562,6 +602,12 @@ if HAS_RUMPS:
             self._shown_errors = set()
             self._ticks = 0
 
+            import edits
+            self._to_learn = []
+            self.watcher = edits.EditWatcher(self.core.learner, self._ask_to_learn)
+            global AFTER_PASTE
+            AFTER_PASTE = self.watcher.watch
+
             self.hotkey = HotkeyListener(self.core, lambda: self.settings["dictation_key"])
             self._load_chosen_model()
             self.hotkey.start()
@@ -689,6 +735,7 @@ if HAS_RUMPS:
             if self.settings["sounds"]:
                 ui.on_main(macos.play_sound, "Tink" if recording else "Pop")
             if recording:
+                ui.on_main(self.watcher.finish)      # judge edits to the last dictation now
                 self.ducker.begin(self.settings["mute_while_dictating"],
                                   self.settings["pause_media_while_dictating"])
             else:
@@ -697,6 +744,31 @@ if HAS_RUMPS:
         def _on_result(self, text, secs):
             self.store.add(text, secs)
             ui.on_main(self._refresh_windows)
+
+        # ── Learning from corrections ──
+
+        def _ask_to_learn(self, fixes):
+            """You fixed words by hand: ask, one at a time, whether Kalam should learn them."""
+            self._to_learn.extend(f for f in fixes if f not in self._to_learn)
+            if self._toast is None:
+                self._next_learn()
+
+        def _next_learn(self):
+            if not self._to_learn:
+                return
+            wrong, right = self._to_learn.pop(0)
+
+            def yes():
+                words = self.core.learner.accept(wrong, right, self.core.dictionary)
+                self.store.save_dictionary(words)
+                ui.on_main(self._refresh_windows)
+                ui.on_main(self._next_learn)
+
+            def no():
+                self.core.learner.decline(wrong, right)
+                ui.on_main(self._next_learn)
+            self._show_toast(self._t("learn.title"), self._t("learn.body", wrong=wrong, right=right),
+                             [(self._t("learn.yes"), yes), (self._t("learn.no"), no)], timeout=30, sound=False)
 
         def _copy_last(self):
             if self.store.history:
@@ -778,6 +850,8 @@ if HAS_RUMPS:
                     self._apply_language()
                 elif k == "speech_model" and not startup:
                     self._load_chosen_model()
+                elif k == "dictation_language" and not startup:
+                    threading.Thread(target=self.core.set_arabic, args=(v != "en",), daemon=True).start()
 
         # ── Speech model ──
 
@@ -836,6 +910,7 @@ if HAS_RUMPS:
             keys = system.DICTATION_KEY_PRESETS + ([] if current in system.DICTATION_KEY_PRESETS else [current])
             st["options"]["dictation_key"] = [(k, system.key_label(k, lang)) for k in keys]
             st["key_label"] = self._key_label()
+            st["fixes"] = dict(self.core.learner.fixes)
             st["notes"] = self.notes.summaries()
             st["note"] = self.notes.get(bridge.note_id) if bridge.note_id else None
             st["model"] = self._model_state()
@@ -862,6 +937,8 @@ if HAS_RUMPS:
             kind = msg.get("type")
             if kind == "saveDictionary":
                 self.store.save_dictionary([str(w) for w in msg.get("words", [])])
+            elif kind == "saveFixes":
+                self.core.learner.save_fixes(dict(msg.get("fixes", {})))
             elif kind == "saveSnippets":
                 self.store.save_snippets({str(k): str(v) for k, v in dict(msg.get("snippets", {})).items()})
             elif kind == "clearHistory":

@@ -33,6 +33,29 @@ def _skip_word_timings():
         sys.modules[name] = stub
 
 
+def keep_resident(nbytes):
+    """Ask macOS to keep up to `nbytes` of MLX memory wired (never paged out to swap).
+
+    Without this, an idle Kalam's 1.6-3.2 GB of weights get swapped out while other apps
+    (After Effects, Blender, browsers) need memory, and the next dictation first waits
+    seconds for them to come back from disk. Needs macOS 15+; harmless where unsupported."""
+    try:
+        import mlx.core as mx
+        info = mx.device_info() if hasattr(mx, "device_info") else mx.metal.device_info()
+        limit = min(int(nbytes), int(info["max_recommended_working_set_size"] * 0.5))
+        mx.set_wired_limit(limit)
+        return limit
+    except Exception as e:
+        print(f"keep_resident: {e}", flush=True)
+        return 0
+
+
+def weights_size(path):
+    """Bytes of weights in a model folder (what has to stay in memory)."""
+    import os
+    return sum(os.path.getsize(os.path.join(path, f)) for f in os.listdir(path) if f.startswith("weights"))
+
+
 def available():
     """True when MLX can run here (Apple silicon with Metal)."""
     try:
@@ -73,6 +96,13 @@ class MlxWhisper:
         self._mx = mx
         self.model = ModelHolder.get_model(self.path, mx.float16)    # loads once, then cached
         self._cached = (None, None)          # (audio fingerprint, encoder output)
+
+    def touch(self):
+        """Read every weight once on the GPU. Called when recording starts, so anything macOS
+        moved out of memory comes back while the user is still talking, not after."""
+        from mlx.utils import tree_flatten
+        mx = self._mx
+        mx.eval([p.sum() for _, p in tree_flatten(self.model.parameters())])
 
     def _features(self, audio):
         """Encoder output for up to 30 s of audio. The encoder is most of the work, so the
@@ -135,13 +165,34 @@ class RoutedWhisper:
     """The "Extensive" model: two Whispers used together. The original large-v3-turbo picks
     the language and writes English; the one retrained on Arabic dialects writes Arabic.
     (The retrained one only learned Arabic: on its own it hears English as Arabic and spells
-    it out in Arabic letters.)"""
+    it out in Arabic letters.)
 
-    LANGUAGES = ("en", "ar")             # warm both models up at load
+    The Arabic one is only kept in memory while the Language setting can produce Arabic
+    (auto or Arabic): with English chosen it is 1.6 GB of memory doing nothing."""
 
-    def __init__(self, base_path, arabic_path):
+    def __init__(self, base_path, arabic_path, need_arabic=True):
         self.base = MlxWhisper(base_path)
-        self.arabic = MlxWhisper(arabic_path)
+        self.arabic_path = arabic_path
+        self.arabic = MlxWhisper(arabic_path) if need_arabic else None
+
+    @property
+    def LANGUAGES(self):                 # warm up the models that are loaded
+        return ("en", "ar") if self.arabic is not None else ("en",)
+
+    def need_arabic(self, need):
+        """Load or drop the Arabic model when the Language setting changes."""
+        if need and self.arabic is None:
+            self.arabic = MlxWhisper(self.arabic_path)
+        elif not need and self.arabic is not None:
+            self.arabic = None
+            import gc
+            gc.collect()
+            self.base._mx.clear_cache()
+
+    def touch(self):
+        self.base.touch()
+        if self.arabic is not None:
+            self.arabic.touch()
 
     def detect_language(self, audio, vad_filter=False, vad_parameters=None):
         return self.base.detect_language(audio, vad_filter=vad_filter, vad_parameters=vad_parameters)
@@ -152,6 +203,8 @@ class RoutedWhisper:
                 language = self.detect_language(audio, vad_filter=True)[0]
             except ValueError:
                 return iter(()), None
+        if language == "ar" and self.arabic is None:
+            self.need_arabic(True)       # Arabic heard or chosen: load it now (a few seconds, once)
         model = self.arabic if language == "ar" else self.base
         return model.transcribe(audio, language=language, **kw)
 

@@ -360,6 +360,9 @@
     <h1><span data-i18n="nav.dict">Your words</span><span class="sub" data-i18n="dict.sub">Names, brands and terms Kalam should spell your way.</span></h1>
     <form class="add" id="dForm"><input id="dIn" placeholder="Add a word, e.g. Ceen Marketing" data-i18n-ph="dict.ph"><button class="ib go" aria-label="Add" title="Add" data-i18n-aria="common.add"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button></form>
     <div class="chips" id="words"></div>
+    <h1 style="margin-top:28px"><span data-i18n="fix.title">Learned fixes</span><span class="sub" data-i18n="fix.sub">Kalam swaps what it heard for what you meant. Fix a word after dictating and it asks to learn it.</span></h1>
+    <form class="add" id="fForm"><input id="fKey" placeholder="Heard, e.g. Hexfield" data-i18n-ph="fix.wrongPh" style="flex:.6"><input id="fVal" placeholder="Write as, e.g. Higgsfield" data-i18n-ph="fix.rightPh"><button class="ib go" aria-label="Add" title="Add" data-i18n-aria="common.add"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button></form>
+    <div class="list" id="fixes"></div>
   </section>
 
   <section class="page" id="snip">
@@ -695,6 +698,14 @@
     document.querySelectorAll('[data-del]').forEach(b => b.onclick = () =>
       post({ type: 'saveDictionary', words: S.dictionary.filter((_, i) => i !== +b.dataset.del) }));
 
+    const fx = S.fixes || {}, fk = Object.keys(fx);
+    $('fixes').innerHTML = fk.map(k => `<div class="row snip" style="grid-template-columns:1fr auto">
+        <div class="x"><b>${esc(k)}</b><span class="arrow">${LANG === 'ar' ? '←' : '→'}</span><span class="exp">${esc(fx[k])}</span></div>
+        <button class="ib" data-fdel="${esc(k)}" title="${t('common.remove')}">${I.x}</button></div>`).join('') ||
+      `<div class="empty">${t('fix.empty')}</div>`;
+    document.querySelectorAll('[data-fdel]').forEach(b => b.onclick = () => {
+      const f = { ...fx }; delete f[b.dataset.fdel]; post({ type: 'saveFixes', fixes: f }); });
+
     const keys = Object.keys(S.snippets);
     $('snips').innerHTML = keys.map(k => `<div class="row snip" style="grid-template-columns:1fr auto">
         <div class="x"><b>${esc(k)}</b><span class="arrow">${LANG === 'ar' ? '←' : '→'}</span><span class="exp">${esc(S.snippets[k])}</span></div>
@@ -709,6 +720,9 @@
 
   $('dForm').onsubmit = e => { e.preventDefault(); const v = $('dIn').value.trim(); if (!v) return;
     post({ type: 'saveDictionary', words: [...S.dictionary, v] }); $('dIn').value = ''; };
+  $('fForm').onsubmit = e => { e.preventDefault(); const k = $('fKey').value.trim(), v = $('fVal').value.trim();
+    if (!k || !v) return; post({ type: 'saveFixes', fixes: { ...(S.fixes || {}), [k.toLowerCase()]: v } });
+    $('fKey').value = $('fVal').value = ''; };
   $('sForm').onsubmit = e => { e.preventDefault(); const k = $('sKey').value.trim(), v = $('sVal').value;
     if (!k || !v) return; post({ type: 'saveSnippets', snippets: { ...S.snippets, [k]: v } });
     $('sKey').value = $('sVal').value = ''; };
